@@ -1,5 +1,5 @@
 /*
- *	Filename : WritableDemo.java
+ *	Filename : TextPair.java
  *	Author : ihainan
  *	E-mail : ihainan72@gmail.com
  *	Website : http://www.ihainan.me
