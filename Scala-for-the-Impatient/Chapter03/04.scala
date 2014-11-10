@@ -1,0 +1,6 @@
+val arr = Array[Int](1, 2, 3, -1, 0, -3, 6, 9)
+// val arrPos = for(i <- 0 until arr.length if arr(i) > 0) yield arr(i)
+// val arrNegZero = for(i <- 0 until arr.length if arr(i) <= 0) yield arr(i)
+// println((arrPos ++ arrNegZero).mkString(" "))
+val resultArr = arr.filter(_ > 0) ++ arr.filter(_ <= 0)
+println(resultArr.mkString("(", ", ", ")"))
