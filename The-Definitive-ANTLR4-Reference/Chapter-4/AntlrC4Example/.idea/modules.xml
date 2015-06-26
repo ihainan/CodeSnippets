@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/AntlrC4Example.iml" filepath="$PROJECT_DIR$/AntlrC4Example.iml" />
+      <module fileurl="file://$PROJECT_DIR$/ExprGrammar/ExprGrammar.iml" filepath="$PROJECT_DIR$/ExprGrammar/ExprGrammar.iml" />
+    </modules>
+  </component>
+</project>
