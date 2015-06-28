@@ -12,6 +12,7 @@ import java.io.InputStream;
 
 public class ExprJoyRide{
     public static void main(String[] args) throws Exception{
+        // 确定输入流
         String inputFile = null;
         if(args.length > 0){
             inputFile = args[0];
@@ -21,12 +22,17 @@ public class ExprJoyRide{
         if(inputFile != null)
             is = new FileInputStream(inputFile);
 
+        // 解析
         ANTLRInputStream input = new ANTLRInputStream(is);
-        ExprLexer lexer = new ExprLexer(input);
-        CommonTokenStream tokens = new CommonTokenStream(lexer);
-        ExprParser parser = new ExprParser(tokens);
-        ParseTree tree = parser.prog();
+        LabeledExprLexer lexer = new LabeledExprLexer(input);                     // 词法解析
+        CommonTokenStream tokens = new CommonTokenStream(lexer);    // 获取单词
+        LabeledExprParser parser = new LabeledExprParser(tokens);                 // 语法解析
+        ParseTree tree = parser.prog();                             // 调用 Prog 规则
 
         System.out.println(tree.toStringTree(parser));
+
+        // 运算
+        EvalVisitor visitor = new EvalVisitor();
+        visitor.visit(tree);
     }
 }
