@@ -23,6 +23,7 @@
         <outputRelativeToContentRoot value="true" />
         <processorPath useClasspath="true" />
         <module name="ThingingInJava" />
+        <module name="Thinking-In-Java" />
       </profile>
     </annotationProcessing>
   </component>
