@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/assembly/spark-assembly_2.10.iml" filepath="$PROJECT_DIR$/assembly/spark-assembly_2.10.iml" />
+      <module fileurl="file://$PROJECT_DIR$/bagel/spark-bagel_2.10.iml" filepath="$PROJECT_DIR$/bagel/spark-bagel_2.10.iml" />
+      <module fileurl="file://$PROJECT_DIR$/sql/catalyst/spark-catalyst_2.10.iml" filepath="$PROJECT_DIR$/sql/catalyst/spark-catalyst_2.10.iml" />
+      <module fileurl="file://$PROJECT_DIR$/core/spark-core_2.10.iml" filepath="$PROJECT_DIR$/core/spark-core_2.10.iml" />
+      <module fileurl="file://$PROJECT_DIR$/examples/spark-examples_2.10.iml" filepath="$PROJECT_DIR$/examples/spark-examples_2.10.iml" />
+      <module fileurl="file://$PROJECT_DIR$/graphx/spark-graphx_2.10.iml" filepath="$PROJECT_DIR$/graphx/spark-graphx_2.10.iml" />
+      <module fileurl="file://$PROJECT_DIR$/sql/hive/spark-hive_2.10.iml" filepath="$PROJECT_DIR$/sql/hive/spark-hive_2.10.iml" />
+      <module fileurl="file://$PROJECT_DIR$/mllib/spark-mllib_2.10.iml" filepath="$PROJECT_DIR$/mllib/spark-mllib_2.10.iml" />
+      <module fileurl="file://$PROJECT_DIR$/network/common/spark-network-common_2.10.iml" filepath="$PROJECT_DIR$/network/common/spark-network-common_2.10.iml" />
+      <module fileurl="file://$PROJECT_DIR$/network/shuffle/spark-network-shuffle_2.10.iml" filepath="$PROJECT_DIR$/network/shuffle/spark-network-shuffle_2.10.iml" />
+      <module fileurl="file://$PROJECT_DIR$/spark-parent.iml" filepath="$PROJECT_DIR$/spark-parent.iml" />
+      <module fileurl="file://$PROJECT_DIR$/repl/spark-repl_2.10.iml" filepath="$PROJECT_DIR$/repl/spark-repl_2.10.iml" />
+      <module fileurl="file://$PROJECT_DIR$/sql/core/spark-sql_2.10.iml" filepath="$PROJECT_DIR$/sql/core/spark-sql_2.10.iml" />
+      <module fileurl="file://$PROJECT_DIR$/external/flume-sink/spark-streaming-flume-sink_2.10.iml" filepath="$PROJECT_DIR$/external/flume-sink/spark-streaming-flume-sink_2.10.iml" />
+      <module fileurl="file://$PROJECT_DIR$/external/flume/spark-streaming-flume_2.10.iml" filepath="$PROJECT_DIR$/external/flume/spark-streaming-flume_2.10.iml" />
+      <module fileurl="file://$PROJECT_DIR$/external/kafka/spark-streaming-kafka_2.10.iml" filepath="$PROJECT_DIR$/external/kafka/spark-streaming-kafka_2.10.iml" />
+      <module fileurl="file://$PROJECT_DIR$/external/mqtt/spark-streaming-mqtt_2.10.iml" filepath="$PROJECT_DIR$/external/mqtt/spark-streaming-mqtt_2.10.iml" />
+      <module fileurl="file://$PROJECT_DIR$/external/twitter/spark-streaming-twitter_2.10.iml" filepath="$PROJECT_DIR$/external/twitter/spark-streaming-twitter_2.10.iml" />
+      <module fileurl="file://$PROJECT_DIR$/external/zeromq/spark-streaming-zeromq_2.10.iml" filepath="$PROJECT_DIR$/external/zeromq/spark-streaming-zeromq_2.10.iml" />
+      <module fileurl="file://$PROJECT_DIR$/streaming/spark-streaming_2.10.iml" filepath="$PROJECT_DIR$/streaming/spark-streaming_2.10.iml" />
+      <module fileurl="file://$PROJECT_DIR$/tools/spark-tools_2.10.iml" filepath="$PROJECT_DIR$/tools/spark-tools_2.10.iml" />
+    </modules>
+  </component>
+</project>

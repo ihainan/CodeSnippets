@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ScalaCompilerConfiguration">
+    <profile name="Maven 1" modules="spark-tools_2.10,spark-bagel_2.10,spark-streaming_2.10,spark-network-shuffle_2.10,spark-streaming-flume-sink_2.10,spark-sql_2.10,spark-streaming-twitter_2.10,spark-catalyst_2.10,spark-core_2.10,spark-repl_2.10,spark-network-common_2.10,spark-mllib_2.10,spark-graphx_2.10,spark-streaming-mqtt_2.10,spark-assembly_2.10,spark-streaming-kafka_2.10,spark-streaming-zeromq_2.10,spark-streaming-flume_2.10,spark-parent,spark-examples_2.10,spark-hive_2.10">
+      <option name="deprecationWarnings" value="true" />
+      <option name="uncheckedWarnings" value="true" />
+      <option name="featureWarnings" value="true" />
+      <plugins>
+        <plugin path="$MAVEN_REPOSITORY$/org/scalamacros/paradise_2.10.4/2.0.1/paradise_2.10.4-2.0.1.jar" />
+      </plugins>
+    </profile>
+  </component>
+</project>

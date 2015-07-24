@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CompilerConfiguration">
+    <option name="DEFAULT_COMPILER" value="Javac" />
+    <resourceExtensions />
+    <wildcardResourcePatterns>
+      <entry name="!?*.java" />
+      <entry name="!?*.form" />
+      <entry name="!?*.class" />
+      <entry name="!?*.groovy" />
+      <entry name="!?*.scala" />
+      <entry name="!?*.flex" />
+      <entry name="!?*.kt" />
+      <entry name="!?*.clj" />
+      <entry name="!?*.aj" />
+    </wildcardResourcePatterns>
+    <annotationProcessing>
+      <profile default="true" name="Default" enabled="false">
+        <processorPath useClasspath="true" />
+      </profile>
+      <profile default="false" name="Maven default annotation processors profile" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="true" />
+        <module name="spark-bagel_2.10" />
+        <module name="spark-catalyst_2.10" />
+        <module name="spark-core_2.10" />
+        <module name="spark-examples_2.10" />
+        <module name="spark-graphx_2.10" />
+        <module name="spark-hive_2.10" />
+        <module name="spark-mllib_2.10" />
+        <module name="spark-network-common_2.10" />
+        <module name="spark-network-shuffle_2.10" />
+        <module name="spark-repl_2.10" />
+        <module name="spark-sql_2.10" />
+        <module name="spark-streaming-flume-sink_2.10" />
+        <module name="spark-streaming-flume_2.10" />
+        <module name="spark-streaming-kafka_2.10" />
+        <module name="spark-streaming-mqtt_2.10" />
+        <module name="spark-streaming-twitter_2.10" />
+        <module name="spark-streaming-zeromq_2.10" />
+        <module name="spark-streaming_2.10" />
+        <module name="spark-tools_2.10" />
+      </profile>
+    </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="spark-bagel_2.10" target="1.6" />
+      <module name="spark-catalyst_2.10" target="1.6" />
+      <module name="spark-core_2.10" target="1.6" />
+      <module name="spark-examples_2.10" target="1.6" />
+      <module name="spark-graphx_2.10" target="1.6" />
+      <module name="spark-hive_2.10" target="1.6" />
+      <module name="spark-mllib_2.10" target="1.6" />
+      <module name="spark-network-common_2.10" target="1.6" />
+      <module name="spark-network-shuffle_2.10" target="1.6" />
+      <module name="spark-repl_2.10" target="1.6" />
+      <module name="spark-sql_2.10" target="1.6" />
+      <module name="spark-streaming-flume-sink_2.10" target="1.6" />
+      <module name="spark-streaming-flume_2.10" target="1.6" />
+      <module name="spark-streaming-kafka_2.10" target="1.6" />
+      <module name="spark-streaming-mqtt_2.10" target="1.6" />
+      <module name="spark-streaming-twitter_2.10" target="1.6" />
+      <module name="spark-streaming-zeromq_2.10" target="1.6" />
+      <module name="spark-streaming_2.10" target="1.6" />
+      <module name="spark-tools_2.10" target="1.6" />
+    </bytecodeTargetLevel>
+  </component>
+</project>
