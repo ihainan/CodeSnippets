@@ -102,7 +102,7 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
       if (curKey.eq(null)) {
         data(2 * pos) = k
         data(2 * pos + 1) = value.asInstanceOf[AnyRef]
-        incrementSize()  // Since we added a new key
+        incrementSize() // Since we added a new key
         return
       } else if (k.eq(curKey) || k.equals(curKey)) {
         data(2 * pos + 1) = value.asInstanceOf[AnyRef]
@@ -122,34 +122,43 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
   def changeValue(key: K, updateFunc: (Boolean, V) => V): V = {
     assert(!destroyed, destructionMessage)
     val k = key.asInstanceOf[AnyRef]
-    if (k.eq(null)) { /* I: Key 是 null 值的情况 */
-      if (!haveNullValue) {  /* I: 之前未曾出现过 null 值 */
-        incrementSize() /* Hash 表的大小 + 1 */
+    /* I: Key == null 要特殊处理 */
+    if (k.eq(null)) {
+      if (!haveNullValue) {
+        /* I: 只有第一次出现 null 值时候才需要考虑扩展大小 */
+        incrementSize()
       }
-      nullValue = updateFunc(haveNullValue, nullValue)  /* I: 更新 */
+      /* I: 第一次出现 null 之后，haveNullValue = false，调用 createCombiner，后面再次出现，调用 mergeValue */
+      nullValue = updateFunc(haveNullValue, nullValue)
       haveNullValue = true
       return nullValue
     }
+    /* I: 等价于取余 */
     var pos = rehash(k.hashCode) & mask
     var i = 1
     while (true) {
       val curKey = data(2 * pos)
-      if (k.eq(curKey) || k.equals(curKey)) { /* 冲突，执行 combine 操作 */
+      if (k.eq(curKey) || k.equals(curKey)) {
+        /* I: 冲突，且 Key 相同，直接执行 combine 操作 */
         val newValue = updateFunc(true, data(2 * pos + 1).asInstanceOf[V])
         data(2 * pos + 1) = newValue.asInstanceOf[AnyRef]
         return newValue
-      } else if (curKey.eq(null)) { /* 不冲突，创建 C */
+      } else if (curKey.eq(null)) {
+        /* I: 当前位置没有值，创建 C */
         val newValue = updateFunc(false, null.asInstanceOf[V])
         data(2 * pos) = k
         data(2 * pos + 1) = newValue.asInstanceOf[AnyRef]
         incrementSize()
         return newValue
-      } else {  /* 什么情况 */
+      } else {
+        /* I: 冲突，且 Key 不相同，右偏移，每次偏移量是上次偏移量 + 1，Loop */
         val delta = i
         pos = (pos + delta) & mask
         i += 1
       }
     }
+
+    /* I: 噗…… */
     null.asInstanceOf[V] // Never reached but needed to keep compiler happy
   }
 
@@ -161,12 +170,16 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
 
       /** Get the next value we should return from next(), or null if we're finished iterating */
       def nextValue(): (K, V) = {
-        if (pos == -1) {    // Treat position -1 as looking at the null value
+        /* I: null 值被放在最开头的位置 */
+        if (pos == -1) {
+          // Treat position -1 as looking at the null value
           if (haveNullValue) {
             return (null.asInstanceOf[K], nullValue)
           }
           pos += 1
         }
+
+        /* I: 遍历 data 表，找出所有值 */
         while (pos < capacity) {
           if (!data(2 * pos).eq(null)) {
             return (data(2 * pos).asInstanceOf[K], data(2 * pos + 1).asInstanceOf[V])
@@ -206,6 +219,7 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
 
   /** Double the table's size and re-hash everything */
   protected def growTable() {
+    /* I: 倍数扩大 */
     val newCapacity = capacity * 2
     if (newCapacity >= (1 << 30)) {
       // We can't make the table this big because we want an array of 2x
@@ -218,11 +232,14 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
     // unique, there's no need to check for equality here when we insert.
     var oldPos = 0
     while (oldPos < capacity) {
+      /* I: 找出表中每一个值 */
       if (!data(2 * oldPos).eq(null)) {
         val key = data(2 * oldPos)
         val value = data(2 * oldPos + 1)
+        /* I: 新位置 */
         var newPos = rehash(key.hashCode) & newMask
         var i = 1
+        /* I: 寻找合适的新位置 */
         var keepGoing = true
         while (keepGoing) {
           val curKey = newData(2 * newPos)
@@ -256,6 +273,7 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
    */
   def destructiveSortedIterator(keyComparator: Comparator[K]): Iterator[(K, V)] = {
     destroyed = true
+    /* I: 所有数据放在最前面 */
     // Pack KV pairs into the front of the underlying array
     var keyIndex, newIndex = 0
     while (keyIndex < capacity) {
@@ -273,7 +291,9 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
     new Iterator[(K, V)] {
       var i = 0
       var nullValueReady = haveNullValue
+
       def hasNext: Boolean = (i < newIndex || nullValueReady)
+
       def next(): (K, V) = {
         if (nullValueReady) {
           nullValueReady = false
