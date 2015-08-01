@@ -48,7 +48,7 @@ class AppendOnlyMap[K, V](initialCapacity: Int = 64)
   private var growThreshold = (LOAD_FACTOR * capacity).toInt
 
   // Holds keys and values in the same array for memory locality; specifically, the order of
-  // elements is key0, value0, key1, value1, key2, value2, etc.
+  // elements is key0, value0, key1, value1, key2, value2, etc.1
   private var data = new Array[AnyRef](2 * capacity)
 
   // Treat the null key differently so we can use nulls in "data" to represent empty items.

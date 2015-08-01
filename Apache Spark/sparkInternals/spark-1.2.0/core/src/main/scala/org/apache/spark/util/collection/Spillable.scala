@@ -30,14 +30,16 @@ private[spark] trait Spillable[C] extends Logging {
    *
    * @param collection collection to spill to disk
    */
-  protected def spill(collection: C): Unit  /* I: 见 ExternalSorter.scala */
+  protected def spill(collection: C): Unit /* I: 见 ExternalSorter.scala */
 
   // Number of elements read from input since last spill
   protected def elementsRead: Long = _elementsRead
 
   // Called by subclasses every time a record is read
   // It's used for checking spilling frequency
-  protected def addElementsRead(): Unit = { _elementsRead += 1 }
+  protected def addElementsRead(): Unit = {
+    _elementsRead += 1
+  }
 
   // Memory manager that can be used to acquire/release memory
   private[this] val shuffleMemoryManager = SparkEnv.get.shuffleMemoryManager
@@ -74,30 +76,30 @@ private[spark] trait Spillable[C] extends Logging {
   protected def maybeSpill(collection: C, currentMemory: Long): Boolean = {
     /*
       I: Spill 的条件：
-        1. 上一次 Spill 之后，读取的元素个数得超过特定值
+        1. 上一次 Spill 之后，读取的元素个数得超过特定值 trackMemoryThreshold = 1000
         2. 上一次 Spill 之后，读取的元素个数得是 32 的倍数
         3. 估计的 Map / Buffer 内存大小已经超过了阈值
      */
     if (elementsRead > trackMemoryThreshold && elementsRead % 32 == 0 &&
-        currentMemory >= myMemoryThreshold) {
-      /* I: 尝试去申请更大的内存空间 */
+      currentMemory >= myMemoryThreshold) {
+      /* I: 尝试扩大阈值 */
       // Claim up to double our current memory from the shuffle memory pool
       val amountToRequest = 2 * currentMemory - myMemoryThreshold
       val granted = shuffleMemoryManager.tryToAcquire(amountToRequest)
       myMemoryThreshold += granted
-      /* I: 仍然无法满足，必须存储在磁盘中了 */
+      /* I: 申请得到的内存还是无法满足当前内存量，必须存储在磁盘中了 */
       if (myMemoryThreshold <= currentMemory) {
         // We were granted too little memory to grow further (either tryToAcquire returned 0,
         // or we already had more memory than myMemoryThreshold); spill the current collection
         _spillCount += 1
         logSpillage(currentMemory)
 
-        spill(collection) /* 真正的 Spill 操作在此 */
+        spill(collection) /* I: 真正的 Spill 操作在此 */
 
-        _elementsRead = 0 /* I: 重置 */
+        _elementsRead = 0 /* I: 重置当前元素个数 */
         // Keep track of spills, and release memory
-        _memoryBytesSpilled += currentMemory  /* 记录释放内存总量 */
-        releaseMemoryForThisThread()  /* I: 释放内存 */
+        _memoryBytesSpilled += currentMemory /* 记录释放内存总量 */
+        releaseMemoryForThisThread() /* I: 释放内存 */
         return true
       }
     }

@@ -40,8 +40,8 @@ import org.apache.spark.executor.ShuffleWriteMetrics
  *
  * This map takes two passes over the data:
  *
- *   (1) Values are merged into combiners, which are sorted and spilled to disk as necessary
- *   (2) Combiners are read from disk and merged together
+ * (1) Values are merged into combiners, which are sorted and spilled to disk as necessary
+ * (2) Combiners are read from disk and merged together
  *
  * The setting of the spill threshold faces the following trade-off: If the spill threshold is
  * too high, the in-memory map may occupy more memory than is available, resulting in OOM.
@@ -51,31 +51,37 @@ import org.apache.spark.executor.ShuffleWriteMetrics
  *
  * Two parameters control the memory threshold:
  *
- *   `spark.shuffle.memoryFraction` specifies the collective amount of memory used for storing
- *   these maps as a fraction of the executor's total memory. Since each concurrently running
- *   task maintains one map, the actual threshold for each map is this quantity divided by the
- *   number of running tasks.
+ * `spark.shuffle.memoryFraction` specifies the collective amount of memory used for storing
+ * these maps as a fraction of the executor's total memory. Since each concurrently running
+ * task maintains one map, the actual threshold for each map is this quantity divided by the
+ * number of running tasks.
  *
- *   `spark.shuffle.safetyFraction` specifies an additional margin of safety as a fraction of
- *   this threshold, in case map size estimation is not sufficiently accurate.
+ * `spark.shuffle.safetyFraction` specifies an additional margin of safety as a fraction of
+ * this threshold, in case map size estimation is not sufficiently accurate.
  */
 @DeveloperApi
 class ExternalAppendOnlyMap[K, V, C](
-    createCombiner: V => C,
-    mergeValue: (C, V) => C,
-    mergeCombiners: (C, C) => C,
-    serializer: Serializer = SparkEnv.get.serializer,
-    blockManager: BlockManager = SparkEnv.get.blockManager)
+                                      createCombiner: V => C,
+                                      mergeValue: (C, V) => C,
+                                      mergeCombiners: (C, C) => C,
+                                      serializer: Serializer = SparkEnv.get.serializer,
+                                      blockManager: BlockManager = SparkEnv.get.blockManager)
   extends Iterable[(K, C)]
   with Serializable
   with Logging
   with Spillable[SizeTracker] {
 
   private var currentMap = new SizeTrackingAppendOnlyMap[K, C]
+  /*
+   * I: 每一个 DiskMapIterator 用于读取一个溢出文件中存储的数据
+   */
   private val spilledMaps = new ArrayBuffer[DiskMapIterator]
   private val sparkConf = SparkEnv.get.conf
   private val diskBlockManager = blockManager.diskBlockManager
 
+  /*
+  * I: 一次序列化的元素个数，防止缓冲区空间不够或者序列化次数过多影响性能
+  * */
   /**
    * Size of object batches when reading/writing from serializers.
    *
@@ -90,6 +96,9 @@ class ExternalAppendOnlyMap[K, V, C](
   // Number of bytes spilled in total
   private var _diskBytesSpilled = 0L
 
+  /*
+  * I: 溢存过程中开设的数据缓冲区的大小
+  * */
   private val fileBufferSize = sparkConf.getInt("spark.shuffle.file.buffer.kb", 32) * 1024
 
   // Write metrics for current spill
@@ -105,6 +114,9 @@ class ExternalAppendOnlyMap[K, V, C](
     insertAll(Iterator((key, value)))
   }
 
+  /*
+  * I: 将数据插入到 map 当中，如果 currentMap 的大小不够了，则尝试进行扩容，还是不够的话，溢存到磁盘当中
+  * */
   /**
    * Insert the given iterator of keys and values into the map.
    *
@@ -124,7 +136,8 @@ class ExternalAppendOnlyMap[K, V, C](
 
     while (entries.hasNext) {
       curEntry = entries.next()
-      if (maybeSpill(currentMap, currentMap.estimateSize())) {  /* I: 是否溢存 */
+      /* I: 检测是否需要进行溢存，会尝试扩大内存 */
+      if (maybeSpill(currentMap, currentMap.estimateSize())) {
         currentMap = new SizeTrackingAppendOnlyMap[K, C]
       }
       currentMap.changeValue(curEntry._1, update) /* I: 更新 C */
@@ -145,6 +158,9 @@ class ExternalAppendOnlyMap[K, V, C](
     insertAll(entries.iterator)
   }
 
+  /*
+  * I: 将 curMap 溢存到磁盘中，多次写入
+  * */
   /**
    * Sort the existing contents of the in-memory map and spill them to a temporary file on disk.
    */
@@ -163,6 +179,7 @@ class ExternalAppendOnlyMap[K, V, C](
       val w = writer
       writer = null
       w.commitAndClose()
+      /* I: 记录写入量 */
       _diskBytesSpilled += curWriteMetrics.shuffleBytesWritten
       batchSizes.append(curWriteMetrics.shuffleBytesWritten)
       objectsWritten = 0
@@ -170,12 +187,16 @@ class ExternalAppendOnlyMap[K, V, C](
 
     var success = false
     try {
+      /* I: 排序！！！ */
       val it = currentMap.destructiveSortedIterator(keyComparator)
       while (it.hasNext) {
         val kv = it.next()
         writer.write(kv)
         objectsWritten += 1
 
+        /*
+        * 一次性写入 serializerBatchSize 个元素
+        * */
         if (objectsWritten == serializerBatchSize) {
           flush()
           curWriteMetrics = new ShuffleWriteMetrics()
@@ -223,18 +244,24 @@ class ExternalAppendOnlyMap[K, V, C](
     }
   }
 
-  /* I: 用于内存数据和文件数据的排序 */
+  /* I: 用于内存数据和文件中 key-value 数据的 merge */
   /**
    * An iterator that sort-merges (K, C) pairs from the in-memory map and the spilled maps
    */
-  private class ExternalIterator   extends Iterator[(K, C)] {
+  private class ExternalIterator extends Iterator[(K, C)] {
     /*
-      I:
+     * I: 优先级队列
+     * 每个 StreamBuffer 内存储 Iterator 头部所有 Key 值相同的 K-V 对
+     * 元素个数 = 1 + 溢存文件数
+     * 会逐渐减少
      */
     // A queue that maintains a buffer for each stream we are currently merging
     // This queue maintains the invariant that it only contains non-empty buffers
     private val mergeHeap = new mutable.PriorityQueue[StreamBuffer]
 
+    /*
+    * I: 对内存中的数据进行排序
+    * */
     // Input streams are derived both from the in-memory map and spilled maps on disk
     // The in-memory map is sorted in place, while the spilled maps are already in sorted order
     private val sortedMap = currentMap.destructiveSortedIterator(keyComparator)
@@ -242,12 +269,18 @@ class ExternalAppendOnlyMap[K, V, C](
 
     inputStreams.foreach { it =>
       val kcPairs = new ArrayBuffer[(K, C)]
+      /*
+      * I: kcPairs 存储 it 头部所有哈希值相同（冲突）的 Key-Value 对
+      * */
       readNextHashCode(it, kcPairs)
       if (kcPairs.length > 0) {
         mergeHeap.enqueue(new StreamBuffer(it, kcPairs))
       }
     }
 
+    /*
+    * I: 从一个 Iterator 中取出与第一个 key 的 hash 值相同的 k-v 对，存到 buf 中
+    * */
     /**
      * Fill a buffer with the next set of keys with the same hash code from a given iterator. We
      * read streams one hash code at a time to ensure we don't miss elements when they are merged.
@@ -269,6 +302,9 @@ class ExternalAppendOnlyMap[K, V, C](
       }
     }
 
+    /*
+    * I: 取 Value，与 oldValue 进行 merge
+    * */
     /**
      * If the given buffer contains a value for the given key, merge that value into
      * baseCombiner and remove the corresponding (K, C) pair from the buffer.
@@ -278,6 +314,9 @@ class ExternalAppendOnlyMap[K, V, C](
       while (i < buffer.pairs.length) {
         val pair = buffer.pairs(i)
         if (pair._1 == key) {
+          /*
+          * K: 一个 Key 只会出现一次，所以可以直接返回
+          * */
           // Note that there's at most one pair in the buffer with a given key, since we always
           // merge stuff in a map before spilling, so it's safe to return after the first we find
           removeFromBuffer(buffer.pairs, i)
@@ -288,6 +327,7 @@ class ExternalAppendOnlyMap[K, V, C](
       baseCombiner
     }
 
+    /* I: 移除第 index 个元素，使用最后一个元素代替 */
     /**
      * Remove the index'th element from an ArrayBuffer in constant time, swapping another element
      * into its place. This is more efficient than the ArrayBuffer.remove method because it does
@@ -296,7 +336,7 @@ class ExternalAppendOnlyMap[K, V, C](
      */
     private def removeFromBuffer[T](buffer: ArrayBuffer[T], index: Int): T = {
       val elem = buffer(index)
-      buffer(index) = buffer(buffer.size - 1)  // This also works if index == buffer.size - 1
+      buffer(index) = buffer(buffer.size - 1) // This also works if index == buffer.size - 1
       buffer.reduceToSize(buffer.size - 1)
       elem
     }
@@ -311,27 +351,60 @@ class ExternalAppendOnlyMap[K, V, C](
      * input streams.
      */
     override def next(): (K, C) = {
+      /*
+      * I: 前面初始化过，所以 MergeHeap 里面起码有一个元素
+      * */
       if (mergeHeap.length == 0) {
         throw new NoSuchElementException
       }
       // Select a key from the StreamBuffer that holds the lowest key hash
+      /*
+      * I: 取出 hash 值最小的 StreamBuffer
+      * */
       val minBuffer = mergeHeap.dequeue()
+      /*
+      * I: 取出内部包含的键值对
+      * */
       val minPairs = minBuffer.pairs
+      /*
+      * I: 获取该 StreamBuffer 的 key.hashCode
+      * */
       val minHash = minBuffer.minKeyHash
+      /*
+      * I: 移除第一个元素，用最后一个元素代替
+      * */
       val minPair = removeFromBuffer(minPairs, 0)
+      /*
+      * I: 哈希值最小的 Key
+      * */
       val minKey = minPair._1
+      /*
+      * I: 对应的 Value
+      * */
       var minCombiner = minPair._2
       assert(hashKey(minPair) == minHash)
 
+      /*
+      * I: 所有拥有相同该 key 的 StreamBuffer，进行 Merge
+      * */
       // For all other streams that may have this key (i.e. have the same minimum key hash),
       // merge in the corresponding value (if any) from that stream
+      /*
+      * I: 先把之前取出来 StreamBuffer 的放回去
+      * */
       val mergedBuffers = ArrayBuffer[StreamBuffer](minBuffer)
       while (mergeHeap.length > 0 && mergeHeap.head.minKeyHash == minHash) {
+        /*
+        * I: 取出，Merge，放回去
+        * */
         val newBuffer = mergeHeap.dequeue()
         minCombiner = mergeIfKeyExists(minKey, minCombiner, newBuffer)
         mergedBuffers += newBuffer
       }
 
+      /*
+      * I: 重复以上操作
+      * */
       // Repopulate each visited stream buffer and add it back to the queue if it is non-empty
       mergedBuffers.foreach { buffer =>
         if (buffer.isEmpty) {
@@ -345,6 +418,9 @@ class ExternalAppendOnlyMap[K, V, C](
       (minKey, minCombiner)
     }
 
+    /*
+    * I: 存储 hash(key) 相同的 key-value
+    * */
     /**
      * A buffer for streaming from a map iterator (in-memory or on-disk) sorted by key hash.
      * Each buffer maintains all of the key-value pairs with what is currently the lowest hash
@@ -356,12 +432,15 @@ class ExternalAppendOnlyMap[K, V, C](
      * that we can put them into a heap and sort that.
      */
     private class StreamBuffer(
-        val iterator: BufferedIterator[(K, C)],
-        val pairs: ArrayBuffer[(K, C)])
+                                val iterator: BufferedIterator[(K, C)],
+                                val pairs: ArrayBuffer[(K, C)])
       extends Comparable[StreamBuffer] {
 
       def isEmpty = pairs.length == 0
 
+      /*
+      * I: 第一个 Key（也是所有的 key）的 hashCode 用于比较
+      * */
       // Invalid if there are no more pairs in this stream
       def minKeyHash: Int = {
         assert(pairs.length > 0)
@@ -373,23 +452,27 @@ class ExternalAppendOnlyMap[K, V, C](
         if (other.minKeyHash < minKeyHash) -1 else if (other.minKeyHash == minKeyHash) 0 else 1
       }
     }
+
   }
 
+  /*
+  * I: 从溢存文件中读取 k-v 数据
+  * */
   /**
    * An iterator that returns (K, C) pairs in sorted order from an on-disk map
    */
   private class DiskMapIterator(file: File, blockId: BlockId, batchSizes: ArrayBuffer[Long])
-    extends Iterator[(K, C)]
-  {
-    private val batchOffsets = batchSizes.scanLeft(0L)(_ + _)  // Size will be batchSize.length + 1
+    extends Iterator[(K, C)] {
+    private val batchOffsets = batchSizes.scanLeft(0L)(_ + _) // Size will be batchSize.length + 1
     assert(file.length() == batchOffsets.last,
       "File length is not equal to the last batch offset:\n" +
-      s"    file length = ${file.length}\n" +
-      s"    last batch offset = ${batchOffsets.last}\n" +
-      s"    all batch offsets = ${batchOffsets.mkString(",")}"
+        s"    file length = ${file.length}\n" +
+        s"    last batch offset = ${batchOffsets.last}\n" +
+        s"    all batch offsets = ${batchOffsets.mkString(",")}"
     )
 
-    private var batchIndex = 0  // Which batch we're in
+    private var batchIndex = 0
+    // Which batch we're in
     private var fileStream: FileInputStream = null
 
     // An intermediate stream that reads from exactly one batch
@@ -475,7 +558,7 @@ class ExternalAppendOnlyMap[K, V, C](
 
     // TODO: Ensure this gets called even if the iterator isn't drained.
     private def cleanup() {
-      batchIndex = batchOffsets.length  // Prevent reading any other batch
+      batchIndex = batchOffsets.length // Prevent reading any other batch
       val ds = deserializeStream
       deserializeStream = null
       fileStream = null
@@ -497,6 +580,9 @@ private[spark] object ExternalAppendOnlyMap {
     if (obj == null) 0 else obj.hashCode()
   }
 
+  /*
+  * I: 比较哈希值，小的放在前面
+  * */
   /**
    * A comparator which sorts arbitrary keys based on their hash codes.
    */
@@ -507,4 +593,5 @@ private[spark] object ExternalAppendOnlyMap {
       if (hash1 < hash2) -1 else if (hash1 == hash2) 0 else 1
     }
   }
+
 }
