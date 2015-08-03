@@ -25,10 +25,10 @@ import org.apache.spark.storage.ShuffleBlockId
 import org.apache.spark.util.collection.ExternalSorter
 
 private[spark] class SortShuffleWriter[K, V, C](
-    shuffleBlockManager: IndexShuffleBlockManager,
-    handle: BaseShuffleHandle[K, V, C],
-    mapId: Int,
-    context: TaskContext)
+                                                 shuffleBlockManager: IndexShuffleBlockManager,
+                                                 handle: BaseShuffleHandle[K, V, C],
+                                                 mapId: Int,
+                                                 context: TaskContext)
   extends ShuffleWriter[K, V] with Logging {
 
   private val dep = handle.dependency
@@ -49,7 +49,7 @@ private[spark] class SortShuffleWriter[K, V, C](
 
   /** Write a bunch of records to this task's output */
   override def write(records: Iterator[_ <: Product2[K, V]]): Unit = {
-    if (dep.mapSideCombine) { /* I: combineByKey */
+    if (dep.mapSideCombine) {
       if (!dep.aggregator.isDefined) {
         throw new IllegalStateException("Aggregator is empty for map-side combine")
       }
@@ -57,17 +57,21 @@ private[spark] class SortShuffleWriter[K, V, C](
         dep.aggregator, Some(dep.partitioner), dep.keyOrdering, dep.serializer)
       sorter.insertAll(records)
     } else {
-      /* I: 如果不指定 mapSideCombine 的话，那也无需关心分区中数据是否是有序的 */
+      /*
+      * I: 与上面 ExternalSorter 的区别：
+      *   => 由于未指定 aggregator，要么直接把数据写入文件中，要么使用 Buffer（而不是 HashMap）进行存储
+      *   =>
+      * */
       // In this case we pass neither an aggregator nor an ordering to the sorter, because we don't
       // care whether the keys get sorted in each partition; that will be done on the reduce side
       // if the operation being run is sortByKey.
       sorter = new ExternalSorter[K, V, V](
         None, Some(dep.partitioner), None, dep.serializer)
-      sorter.insertAll(records) /* I: 把数据放入到内存中，需要的话，会溢存到磁盘中 */
+      sorter.insertAll(records)
     }
 
     val outputFile = shuffleBlockManager.getDataFile(dep.shuffleId, mapId)
-    val blockId = shuffleBlockManager.consolidateId(dep.shuffleId, mapId)  /* I: "shuffle_" + shuffleId + "_" + mapId + "_" + reduceId + ".index" */
+    val blockId = shuffleBlockManager.consolidateId(dep.shuffleId, mapId) /* I: "shuffle_" + shuffleId + "_" + mapId + "_" + reduceId + ".index" */
     val partitionLengths = sorter.writePartitionedFile(blockId, context, outputFile)
     shuffleBlockManager.writeIndexFile(dep.shuffleId, mapId, partitionLengths)
 

@@ -112,8 +112,12 @@ class FileShuffleBlockManager(conf: SparkConf)
       private val shuffleState = shuffleStates(shuffleId)
       private var fileGroup: ShuffleFileGroup = null
 
+      /*
+      * I: consolidateShuffleFiles 参数将多个文件合并成一个文件，减少文件总数
+      * 合并的是不同批次 Map 任务的输出数据
+      * */
       val writers: Array[BlockObjectWriter] = if (consolidateShuffleFiles) {
-        fileGroup = getUnusedFileGroup()
+        fileGroup = getUnusedFileGroup()  /* I: 一系列 Shuffle File，一个 Reducer 对应一个（文件总数并没有变） */
         Array.tabulate[BlockObjectWriter](numBuckets) { bucketId =>
           val blockId = ShuffleBlockId(shuffleId, mapId, bucketId)
           blockManager.getDiskWriter(blockId, fileGroup(bucketId), serializer, bufferSize,
@@ -149,6 +153,9 @@ class FileShuffleBlockManager(conf: SparkConf)
         }
       }
 
+      /*
+      * I:
+      * */
       private def getUnusedFileGroup(): ShuffleFileGroup = {
         val fileGroup = shuffleState.unusedFileGroups.poll()
         if (fileGroup != null) fileGroup else newFileGroup()

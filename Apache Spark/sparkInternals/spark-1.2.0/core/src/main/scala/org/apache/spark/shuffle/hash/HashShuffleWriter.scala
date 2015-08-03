@@ -25,10 +25,10 @@ import org.apache.spark.shuffle._
 import org.apache.spark.storage.BlockObjectWriter
 
 private[spark] class HashShuffleWriter[K, V](
-    shuffleBlockManager: FileShuffleBlockManager,
-    handle: BaseShuffleHandle[K, V, _],
-    mapId: Int,
-    context: TaskContext)
+                                              shuffleBlockManager: FileShuffleBlockManager,
+                                              handle: BaseShuffleHandle[K, V, _],
+                                              mapId: Int,
+                                              context: TaskContext)
   extends ShuffleWriter[K, V] with Logging {
 
   private val dep = handle.dependency
@@ -45,6 +45,9 @@ private[spark] class HashShuffleWriter[K, V](
 
   private val blockManager = SparkEnv.get.blockManager
   private val ser = Serializer.getSerializer(dep.serializer.getOrElse(null))
+  /*
+  * I: forMapTask 针对给定的 ShuffleMapTask 生成一组 BlockObjectWriter 对象
+  * */
   private val shuffle = shuffleBlockManager.forMapTask(dep.shuffleId, mapId, numOutputSplits, ser,
     writeMetrics)
 
@@ -61,12 +64,13 @@ private[spark] class HashShuffleWriter[K, V](
     } else if (dep.aggregator.isEmpty && dep.mapSideCombine) {
       throw new IllegalStateException("Aggregator is empty for map-side combine")
     } else {
+      /* I: 不需要 combine，直接返回数据集 */
       records
     }
 
     for (elem <- iter) {
-      val bucketId = dep.partitioner.getPartition(elem._1)
-      shuffle.writers(bucketId).write(elem)
+      val bucketId = dep.partitioner.getPartition(elem._1) /* I: 桶 ID 号即 Reducer 编号 */
+      shuffle.writers(bucketId).write(elem) /* I: 写入到本地文件中 */
     }
   }
 
