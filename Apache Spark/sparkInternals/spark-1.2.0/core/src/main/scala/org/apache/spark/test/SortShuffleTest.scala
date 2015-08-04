@@ -24,7 +24,7 @@ object SortShuffleTest {
     *       => mapSide.combine = true && aggregation != null
     *         => 使用 SizeTrackingAppendOnlyMap
     *           => 对于一个元素
-    *             => SizeTrackingAppendOnlyMap.changeValue
+    *             => combineValuesByKey.changeValue
     *               => 监控数目和文件大小，必要时候 size x 2
     *               => 执行 Combine 操作
     *           => maybeSpillCollection(usingMap = true)

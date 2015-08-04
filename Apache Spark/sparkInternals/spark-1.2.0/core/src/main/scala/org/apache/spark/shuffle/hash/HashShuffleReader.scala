@@ -23,12 +23,11 @@ import org.apache.spark.shuffle.{BaseShuffleHandle, ShuffleReader}
 import org.apache.spark.util.collection.ExternalSorter
 
 private[spark] class HashShuffleReader[K, C](
-    handle: BaseShuffleHandle[K, _, C], /* I: 存储 Shuffle 相关的信息，比如 Shuffle ID，Mapper 的数目，对应的 Shuffle Dependency 等 */
-    startPartition: Int, /* I: 分区编号 */
-    endPartition: Int,  /* I: 分区编号 + 1 （For ShuffledRDD）*/
-    context: TaskContext)
-  extends ShuffleReader[K, C]
-{
+                                              handle: BaseShuffleHandle[K, _, C], /* I: 存储 Shuffle 相关的信息，比如 Shuffle ID，Mapper 的数目，对应的 Shuffle Dependency 等 */
+                                              startPartition: Int, /* I: 分区编号 */
+                                              endPartition: Int, /* I: 分区编号 + 1 （For ShuffledRDD）*/
+                                              context: TaskContext)
+  extends ShuffleReader[K, C] {
   require(endPartition == startPartition + 1,
     "Hash shuffle currently only supports fetching one partition")
 
@@ -38,21 +37,33 @@ private[spark] class HashShuffleReader[K, C](
   override def read(): Iterator[Product2[K, C]] = {
     val ser = Serializer.getSerializer(dep.serializer)
     val iter = BlockStoreShuffleFetcher.fetch(handle.shuffleId, startPartition, context, ser) /* I: 获取 Map 端的数据，并作聚合，startPartition 即 Partition ID，也是 Reducer ID */
-
+    /*
+    * I:
+    *   => 对于 HashShuffle
+    *     => mapSideCombine 意味着 ExternalAppendOnlyMap / AppendOnlyMap
+    *       => aggregator 必须存在
+    *     => aggregator 不存在
+    *       => 直接写入数据
+    *   => 对于 SortShuffle
+    *     => mapSideCombine 意味着 SizeTrackingAppendOnlyMap
+    *       => aggregator 必须存在
+    *     => aggregator 不存在
+    *       => bypassMerge 或者 Buffer
+    * */
     val aggregatedIter: Iterator[Product2[K, C]] = if (dep.aggregator.isDefined) {
-      /* Q: 在什么情况下考虑这个？*/
-      if (dep.mapSideCombine) {
-        new InterruptibleIterator(context, dep.aggregator.get.combineCombinersByKey(iter, context))
+        if (dep.mapSideCombine) {
+          // 进行 combine 操作
+          new InterruptibleIterator(context, dep.aggregator.get.combineCombinersByKey(iter, context))
+        } else {
+          // 不进行 combine 操作
+          new InterruptibleIterator(context, dep.aggregator.get.combineValuesByKey(iter, context))
+        }
+      } else if (dep.aggregator.isEmpty && dep.mapSideCombine) {
+        throw new IllegalStateException("Aggregator is empty for map-side combine")
       } else {
-        /* I: SortShuffleWriter 端的 Combine 方式，InterruptibleIterator 本质上就是 Iterator，调用 aggregator 的 combineValuesByKey 函数 */
-        new InterruptibleIterator(context, dep.aggregator.get.combineValuesByKey(iter, context))
+        // Convert the Product2s to pairs since this is what downstream RDDs currently expect
+        iter.asInstanceOf[Iterator[Product2[K, C]]].map(pair => (pair._1, pair._2))
       }
-    } else if (dep.aggregator.isEmpty && dep.mapSideCombine) {
-      throw new IllegalStateException("Aggregator is empty for map-side combine")
-    } else {
-      // Convert the Product2s to pairs since this is what downstream RDDs currently expect
-      iter.asInstanceOf[Iterator[Product2[K, C]]].map(pair => (pair._1, pair._2))
-    }
 
     // Sort the output if there is a sort ordering defined.
     dep.keyOrdering match {

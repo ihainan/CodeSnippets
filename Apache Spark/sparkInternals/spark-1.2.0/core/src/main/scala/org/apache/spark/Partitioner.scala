@@ -35,6 +35,7 @@ import org.apache.spark.util.random.{XORShiftRandom, SamplingUtils}
  */
 abstract class Partitioner extends Serializable {
   def numPartitions: Int
+
   def getPartition(key: Any): Int
 }
 
@@ -56,13 +57,14 @@ object Partitioner {
    */
   def defaultPartitioner(rdd: RDD[_], others: RDD[_]*): Partitioner = {
     val bySize = (Seq(rdd) ++ others).sortBy(_.partitions.size).reverse /* I: 按照分区个数大从小排序 */
-    for (r <- bySize if r.partitioner.isDefined) {  /* I: 其中一个 RDD 指定了分区器 */
+    for (r <- bySize if r.partitioner.isDefined) {
+      /* I: 其中一个 RDD 指定了分区器 */
       return r.partitioner.get
     }
     if (rdd.context.conf.contains("spark.default.parallelism")) {
-      new HashPartitioner(rdd.context.defaultParallelism)   /* I: 指定了 parallelism 参数，则使用 HashPartitioner，子 RDD 分数目 =  parallelism */
+      new HashPartitioner(rdd.context.defaultParallelism) /* I: 指定了 parallelism 参数，则使用 HashPartitioner，子 RDD 分数目 =  parallelism */
     } else {
-      new HashPartitioner(bySize.head.partitions.size)      /* I: 否则还是使用 HashPartitioner，子分区个数 = 分区数目最多的 RDD 的最大分区个数 */
+      new HashPartitioner(bySize.head.partitions.size) /* I: 否则还是使用 HashPartitioner，子分区个数 = 分区数目最多的 RDD 的最大分区个数 */
     }
   }
 }
@@ -95,6 +97,10 @@ class HashPartitioner(partitions: Int) extends Partitioner {
   override def hashCode: Int = numPartitions
 }
 
+
+/* I: 类似于 TeraSort */
+/* L: Terasort 算法：triehttp://dongxicheng.org/mapreduce/hadoop-terasort-analyse/ */
+/* L: Trie 树：https://zh.wikipedia.org/wiki/Trie */
 /**
  * A [[org.apache.spark.Partitioner]] that partitions sortable records by range into roughly
  * equal ranges. The ranges are determined by sampling the content of the RDD passed in.
@@ -103,10 +109,10 @@ class HashPartitioner(partitions: Int) extends Partitioner {
  * as the `partitions` parameter, in the case where the number of sampled records is less than
  * the value of `partitions`.
  */
-class RangePartitioner[K : Ordering : ClassTag, V](
-    @transient partitions: Int,
-    @transient rdd: RDD[_ <: Product2[K,V]],
-    private var ascending: Boolean = true)
+class RangePartitioner[K: Ordering : ClassTag, V](
+                                                   @transient partitions: Int,
+                                                   @transient rdd: RDD[_ <: Product2[K, V]],
+                                                   private var ascending: Boolean = true)
   extends Partitioner {
 
   // We allow partitions = 0, which happens when sorting an empty RDD under the default settings.
@@ -114,30 +120,44 @@ class RangePartitioner[K : Ordering : ClassTag, V](
 
   private var ordering = implicitly[Ordering[K]]
 
+  /*
+  * 对 RDD 前 partitions - 1 个分区进行采样，获得得到上限和下限
+  * */
   // An array of upper bounds for the first (partitions - 1) partitions
-  private var rangeBounds: Array[K] = {
+  var rangeBounds: Array[K] = {
     if (partitions <= 1) {
       Array.empty
     } else {
+      /* I: 采样大小，每个分区采集 20 bytes，最大采集 1 M */
       // This is the sample size we need to have roughly balanced output partitions, capped at 1M.
       val sampleSize = math.min(20.0 * partitions, 1e6)
+      /* I: 每个分区的采样大小 */
+      /* Q: 为什么 * 3? */
       // Assume the input partitions are roughly balanced and over-sample a little bit.
       val sampleSizePerPartition = math.ceil(3.0 * sampleSize / rdd.partitions.size).toInt
+      /* I: 对所有的 Key 进行采样，每个分区采样 sampleSizePerPartition 个元素 */
+      /* I: numItems：采样总数，sketched: RDD[Iterator] */
       val (numItems, sketched) = RangePartitioner.sketch(rdd.map(_._1), sampleSizePerPartition)
       if (numItems == 0L) {
         Array.empty
       } else {
         // If a partition contains much more than the average number of items, we re-sample from it
         // to ensure that enough items are collected from that partition.
-        val fraction = math.min(sampleSize / math.max(numItems, 1L), 1.0)
-        val candidates = ArrayBuffer.empty[(K, Float)]
-        val imbalancedPartitions = mutable.Set.empty[Int]
-        sketched.foreach { case (idx, n, sample) =>
+        val fraction = math.min(sampleSize / math.max(numItems, 1L), 1.0) /* I: < 1 说明采样数目 > sampleSize */
+        val candidates = ArrayBuffer.empty[(K, Float)] /* I: 最后得到的 Key */
+        val imbalancedPartitions = mutable.Set.empty[Int] /* I: 采样不平衡的分区 */
+        sketched.foreach { case (idx, n, sample) => /* (partitionId, number of items, sample) */
+          /* I: fraction 可以理解为希望采样数 / 实际采样数，fraction <= 1 */
+          /* I: 采样数目比平均值高 */
           if (fraction * n > sampleSizePerPartition) {
+            /* I: 记录 */
             imbalancedPartitions += idx
           } else {
+            /* I: 采样数目等于或者比平均值少 */
+            /* I: Weight = 1 */
             // The weight is 1 over the sampling probability.
             val weight = (n.toDouble / sample.size).toFloat
+            /* I: 可以使用的样本 */
             for (key <- sample) {
               candidates += ((key, weight))
             }
@@ -163,6 +183,7 @@ class RangePartitioner[K : Ordering : ClassTag, V](
   def getPartition(key: Any): Int = {
     val k = key.asInstanceOf[K]
     var partition = 0
+    /* I: 普通查找 */
     if (rangeBounds.length <= 128) {
       // If we have less than 128 partitions naive search
       while (partition < rangeBounds.length && ordering.gt(k, rangeBounds(partition))) {
@@ -173,7 +194,7 @@ class RangePartitioner[K : Ordering : ClassTag, V](
       partition = binarySearch(rangeBounds, k)
       // binarySearch either returns the match location or -[insertion point]-1
       if (partition < 0) {
-        partition = -partition-1
+        partition = -partition - 1
       }
       if (partition > rangeBounds.length) {
         partition = rangeBounds.length
@@ -187,7 +208,7 @@ class RangePartitioner[K : Ordering : ClassTag, V](
   }
 
   override def equals(other: Any): Boolean = other match {
-    case r: RangePartitioner[_,_] =>
+    case r: RangePartitioner[_, _] =>
       r.rangeBounds.sameElements(rangeBounds) && r.ascending == ascending
     case _ =>
       false
@@ -244,6 +265,7 @@ class RangePartitioner[K : Ordering : ClassTag, V](
 
 private[spark] object RangePartitioner {
 
+  /* I: 从每个分区中随机抽取 sampleSizePerPartition 个元素 */
   /**
    * Sketches the input RDD via reservoir sampling on each partition.
    *
@@ -251,13 +273,19 @@ private[spark] object RangePartitioner {
    * @param sampleSizePerPartition max sample size per partition
    * @return (total number of items, an array of (partitionId, number of items, sample))
    */
-  def sketch[K:ClassTag](
-      rdd: RDD[K],
-      sampleSizePerPartition: Int): (Long, Array[(Int, Int, Array[K])]) = {
+  def sketch[K: ClassTag](
+                           rdd: RDD[K],
+                           sampleSizePerPartition: Int): (Long, Array[(Int, Int, Array[K])]) = {
     val shift = rdd.id
     // val classTagK = classTag[K] // to avoid serializing the entire partitioner object
+    /* I: 对每个分区进行一个采样 */
     val sketched = rdd.mapPartitionsWithIndex { (idx, iter) =>
+      /* I: partition number `idx` - and rdd.id are used to calculate unique seed for every partition -
+      to ensure that elements are selected in unique manner for every parition */
       val seed = byteswap32(idx ^ (shift << 16))
+      /* I: Reservoir Sample / 鱼塘采样 */
+      /* L: https://zh.wikipedia.org/wiki/%E6%B0%B4%E5%A1%98%E6%8A%BD%E6%A8%A3 */
+      /* L: http://stackoverflow.com/questions/25481622/what-is-sketch-method-doing-in-rangepartitioner-of-spark */
       val (sample, n) = SamplingUtils.reservoirSampleAndCount(
         iter, sampleSizePerPartition, seed)
       Iterator((idx, n, sample))
@@ -274,14 +302,14 @@ private[spark] object RangePartitioner {
    * @param partitions number of partitions
    * @return selected bounds
    */
-  def determineBounds[K:Ordering:ClassTag](
-      candidates: ArrayBuffer[(K, Float)],
-      partitions: Int): Array[K] = {
+  def determineBounds[K: Ordering : ClassTag](
+                                               candidates: ArrayBuffer[(K, Float)],
+                                               partitions: Int): Array[K] = {
     val ordering = implicitly[Ordering[K]]
-    val ordered = candidates.sortBy(_._1)
-    val numCandidates = ordered.size
-    val sumWeights = ordered.map(_._2.toDouble).sum
-    val step = sumWeights / partitions
+    val ordered = candidates.sortBy(_._1) /* I: 按照 key 进行排序 */
+    val numCandidates = ordered.size /* I: 候选数据的大小 */
+    val sumWeights = ordered.map(_._2.toDouble).sum /* I: 权重之和 */
+    val step = sumWeights / partitions /* 步长 */
     var cumWeight = 0.0
     var target = step
     val bounds = ArrayBuffer.empty[K]
@@ -291,9 +319,11 @@ private[spark] object RangePartitioner {
     while ((i < numCandidates) && (j < partitions - 1)) {
       val (key, weight) = ordered(i)
       cumWeight += weight
+      /* I: 达到一个步长 */
       if (cumWeight > target) {
         // Skip duplicate values.
         if (previousBound.isEmpty || ordering.gt(key, previousBound.get)) {
+          /* I: 确定 bound */
           bounds += key
           target += step
           j += 1

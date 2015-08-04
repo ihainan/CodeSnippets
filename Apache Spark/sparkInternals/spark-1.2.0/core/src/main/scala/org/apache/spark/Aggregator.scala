@@ -40,7 +40,6 @@ case class Aggregator[K, V, C] (
   def combineValuesByKey(iter: Iterator[_ <: Product2[K, V]]): Iterator[(K, C)] =
     combineValuesByKey(iter, null)
 
-  /* I: 类似于 ExternalSorter.insertAll  */
   def combineValuesByKey(iter: Iterator[_ <: Product2[K, V]],
                          context: TaskContext): Iterator[(K, C)] = {
     if (!externalSorting) {
@@ -75,7 +74,7 @@ case class Aggregator[K, V, C] (
       : Iterator[(K, C)] =
   {
     if (!externalSorting) { /* I: 无需外部排序 */
-      val combiners = new AppendOnlyMap[K,C]  /* I: 类似于 SizeTrackingAppendOnlyMap */
+      val combiners = new AppendOnlyMap[K,C]
       var kc: Product2[K, C] = null
       val update = (hadValue: Boolean, oldValue: C) => {
         if (hadValue) mergeCombiners(oldValue, kc._2) else kc._2
