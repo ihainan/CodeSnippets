@@ -264,6 +264,9 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
    * "combiner" in MapReduce.
    */
   def reduceByKey(partitioner: Partitioner, func: (V, V) => V): RDD[(K, V)] = {
+    /* I: 指定分区器，函数 */
+    /* I: 调用 combineByKey 生成 ShuffledRDD */
+    /* I: createCombiner，mergeValue，mergeCombiners */
     combineByKey[V]((v: V) => v, func, func, partitioner)
   }
 
@@ -273,6 +276,7 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
    * "combiner" in MapReduce. Output will be hash-partitioned with numPartitions partitions.
    */
   def reduceByKey(func: (V, V) => V, numPartitions: Int): RDD[(K, V)] = {
+    /* I: 指定函数，分区数目，默认使用 HashPartitioner */
     reduceByKey(new HashPartitioner(numPartitions), func)
   }
 
@@ -283,6 +287,7 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
    * parallelism level.
    */
   def reduceByKey(func: (V, V) => V): RDD[(K, V)] = {
+    /* I: 未指定分区数，使用默认分区器 */
     reduceByKey(defaultPartitioner(self), func)
   }
 
