@@ -34,9 +34,9 @@ import org.apache.spark.shuffle.ShuffleHandle
 private[spark] sealed trait CoGroupSplitDep extends Serializable
 
 private[spark] case class NarrowCoGroupSplitDep(
-    rdd: RDD[_],
-    splitIndex: Int,
-    var split: Partition
+    rdd: RDD[_],  /* I: 分区所依赖的 RDD */
+    splitIndex: Int,  /* I: 分区编号 */
+    var split: Partition  /* I: 分区 */
   ) extends CoGroupSplitDep {
 
   @throws(classOf[IOException])
@@ -85,12 +85,15 @@ class CoGroupedRDD[K](@transient var rdds: Seq[RDD[_ <: Product2[K, _]]], part: 
     this
   }
 
+  /* I: Dependency 不是固定的 */
   override def getDependencies: Seq[Dependency[_]] = {
     rdds.map { rdd: RDD[_ <: Product2[K, _]] =>
+      /* I: Partitioner 相同，则是 OneToOneDepdencency */
       if (rdd.partitioner == Some(part)) {
         logDebug("Adding one-to-one dependency with " + rdd)
         new OneToOneDependency(rdd)
       } else {
+        /* I: Partitioner 不同，则是 ShuffleDependency */
         logDebug("Adding shuffle dependency with " + rdd)
         new ShuffleDependency[K, Any, CoGroupCombiner](rdd, part, serializer)
       }
@@ -118,18 +121,22 @@ class CoGroupedRDD[K](@transient var rdds: Seq[RDD[_ <: Product2[K, _]]], part: 
 
   override def compute(s: Partition, context: TaskContext): Iterator[(K, Array[Iterable[_]])] = {
     val sparkConf = SparkEnv.get.conf
-    val externalSorting = sparkConf.getBoolean("spark.shuffle.spill", true)
+    val externalSorting = sparkConf.getBoolean("spark.shuffle.spill", true) /* I: 外部排序 */
     val split = s.asInstanceOf[CoGroupPartition]
-    val numRdds = split.deps.size
+    val numRdds = split.deps.size /* I: 依赖（RDD）个数 */
+
 
     // A list of (rdd iterator, dependency number) pairs
     val rddIterators = new ArrayBuffer[(Iterator[Product2[K, Any]], Int)]
+    /* I: (依赖，依赖编号) */
     for ((dep, depNum) <- split.deps.zipWithIndex) dep match {
       case NarrowCoGroupSplitDep(rdd, _, itsSplit) =>
+        /* I: 一一对应，直接从 rdd 相同分区中拉取数据 */
         // Read them from the parent
         val it = rdd.iterator(itsSplit, context).asInstanceOf[Iterator[Product2[K, Any]]]
         rddIterators += ((it, depNum))
 
+        /* I: read()，数据由 Map 端的分区器决定 */
       case ShuffleCoGroupSplitDep(handle) =>
         // Read map outputs of shuffle
         val it = SparkEnv.get.shuffleManager

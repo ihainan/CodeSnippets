@@ -96,12 +96,12 @@ class OneToOneDependency[T](rdd: RDD[T]) extends NarrowDependency[T](rdd) {
  * :: DeveloperApi ::
  * Represents a one-to-one dependency between ranges of partitions in the parent and child RDDs.
  * @param rdd the parent RDD
- * @param inStart the start of the range in the parent RDD
- * @param outStart the start of the range in the child RDD
- * @param length the length of the range
+ * @param inStart the start of the range in the parent RDD  /* 0 */
+ * @param outStart the start of the range in the child RDD  /* 前面所有 RDD 分区个数的总和 */
+ * @param length the length of the range  /*  父 RDD 分区的个数 */
  */
 @DeveloperApi
-class RangeDependency[T](rdd: RDD[T], inStart: Int, outStart: Int, length: Int)
+  class RangeDependency[T](rdd: RDD[T], inStart: Int, outStart: Int, length: Int)
   extends NarrowDependency[T](rdd) {
 
   override def getParents(partitionId: Int) = {

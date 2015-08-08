@@ -721,7 +721,12 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
     if (partitioner.isInstanceOf[HashPartitioner] && keyClass.isArray) {
       throw new SparkException("Default partitioner cannot partition array keys.")
     }
+    /* I: 生成 CoGroupedRDD，而不是 ShuffledRDD！ */
     val cg = new CoGroupedRDD[K](Seq(self, other), partitioner)
+    /* I: 调用 mapValues，保留 Key，修改 Value */
+    /* I: case 关键字，case Class*/
+    /* L: http://www.zhihu.com/question/29175392 */
+    /* L: http://www.tuicool.com/articles/amEBva */
     cg.mapValues { case Array(vs, w1s) =>
       (vs.asInstanceOf[Iterable[V]], w1s.asInstanceOf[Iterable[W]])
     }
