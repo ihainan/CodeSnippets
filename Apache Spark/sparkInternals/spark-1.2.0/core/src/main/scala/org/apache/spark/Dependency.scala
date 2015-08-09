@@ -64,11 +64,11 @@ abstract class NarrowDependency[T](_rdd: RDD[T]) extends Dependency[T] {
 @DeveloperApi
 class ShuffleDependency[K, V, C](
     @transient _rdd: RDD[_ <: Product2[K, V]],
-    val partitioner: Partitioner, /* I: 分区函数，确定某特定 key 的 Record 会被分配到子 RDD 哪一个分区当中 */
+    val partitioner: Partitioner,
     val serializer: Option[Serializer] = None,
-    val keyOrdering: Option[Ordering[K]] = None,  /* I: 决定是否对 Shuffle 最后的结果进行排序 */
-    val aggregator: Option[Aggregator[K, V, C]] = None, /* I: 包含一系列聚合函数 */
-    val mapSideCombine: Boolean = false)  /* I: 是否在 map 端执行 combine 操作，无效 */
+    val keyOrdering: Option[Ordering[K]] = None,
+    val aggregator: Option[Aggregator[K, V, C]] = None,
+    val mapSideCombine: Boolean = false)
   extends Dependency[Product2[K, V]] {
 
   override def rdd = _rdd.asInstanceOf[RDD[Product2[K, V]]]

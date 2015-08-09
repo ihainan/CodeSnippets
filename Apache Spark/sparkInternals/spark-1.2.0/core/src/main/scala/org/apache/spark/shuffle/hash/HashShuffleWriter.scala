@@ -70,7 +70,7 @@ private[spark] class HashShuffleWriter[K, V](
 
     for (elem <- iter) {
       val bucketId = dep.partitioner.getPartition(elem._1) /* I: 桶 ID 号即 Reducer 编号 */
-      shuffle.writers(bucketId).write(elem) /* I: 写入到本地文件中 */
+      shuffle.writers(bucketId).write(elem)                /* I: 写入到本地文件中 */
     }
   }
 
