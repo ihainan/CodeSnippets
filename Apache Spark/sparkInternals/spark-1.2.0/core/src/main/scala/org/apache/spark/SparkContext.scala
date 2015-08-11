@@ -1277,12 +1277,17 @@ class SparkContext(config: SparkConf) extends Logging {
       throw new SparkException("SparkContext has been shutdown")
     }
     val callSite = getCallSite
+    /* I: 闭包清理 */
+    /* L: https://github.com/ColZer/DigAndBuried/blob/master/spark/function-closure-cleaner.md */
     val cleanedFunc = clean(func)
     logInfo("Starting job: " + callSite.shortForm)
+    /* I:
+    * 注意 resultHandler，数据
+    * */
     dagScheduler.runJob(rdd, cleanedFunc, partitions, callSite, allowLocal,
       resultHandler, localProperties.get)
     progressBar.foreach(_.finishAll())
-    rdd.doCheckpoint()
+    rdd.doCheckpoint()  /* I: 寻找标记为 MarkForCheckpoint 的 RDD，将 RDD 标记为 CheckpointingInProgress，并启动作业来完成数据写入工作 */
   }
 
   /**
@@ -1297,6 +1302,7 @@ class SparkContext(config: SparkConf) extends Logging {
       allowLocal: Boolean
       ): Array[U] = {
     val results = new Array[U](partitions.size)
+    /* I: 注意看回调函数 resultHandler 的定义 */
     runJob[T, U](rdd, func, partitions, allowLocal, (index, res) => results(index) = res)
     results
   }

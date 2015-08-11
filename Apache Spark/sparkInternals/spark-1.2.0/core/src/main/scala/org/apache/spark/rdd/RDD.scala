@@ -1276,6 +1276,8 @@ abstract class RDD[T: ClassTag](
    * doCheckpoint() is called recursively on the parent RDDs.
    */
   private[spark] def doCheckpoint() {
+    /* I: 只会被调用一次 */
+    /* I: 意味着  */
     if (!doCheckpointCalled) {
       doCheckpointCalled = true
       if (checkpointData.isDefined) {
